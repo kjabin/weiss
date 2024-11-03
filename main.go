@@ -3,9 +3,9 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 
+	"github.com/fatih/color"
 	"github.com/gorilla/websocket"
 )
 
@@ -25,13 +25,13 @@ type Client struct {
 }
 
 func NewClient(url string) (Client, error) {
-	log.Println("Connection to url:", url)
+	color.Yellow("Connecting to url: %v", url)
 	conn, resp, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		return Client{}, err
 	}
 	if resp != nil && resp.StatusCode == 101 {
-		log.Println("Websocket connection established with", conn.RemoteAddr())
+		color.Yellow("Websocket connection established with %v", conn.RemoteAddr())
 	}
 	return Client{
 		conn:   conn,
@@ -57,7 +57,7 @@ func (c *Client) HandleUserInput() {
 			}
 		}
 		if err := sc.Err(); err != nil {
-			log.Println("Scan error: ", err)
+			color.Red("Scan error: %v", err)
 			return
 		}
 	}
@@ -67,7 +67,7 @@ func (c *Client) Run() {
 	for {
 		select {
 		case e := <-c.recvCh:
-			fmt.Println(e)
+			color.Blue("%v", e)
 		case e := <-c.sendCh:
 			c.conn.WriteMessage(e.Kind, e.Message)
 		}
@@ -77,8 +77,8 @@ func (c *Client) HandleServerEvents() {
 	for {
 		kind, message, err := c.conn.ReadMessage()
 		if err != nil {
-			log.Println("WS error: ", err)
-			return
+			color.Red("Websocket error: %v", err)
+			os.Exit(1)
 		}
 		c.recvCh <- Event{
 			Kind:    kind,
@@ -89,13 +89,15 @@ func (c *Client) HandleServerEvents() {
 
 func main() {
 	if len(os.Args) < 2 {
-		log.Fatal("Websocket URL required")
+		color.Red("Websocket URL required")
+		os.Exit(1)
 	}
 	url := os.Args[1]
 
 	client, err := NewClient(url)
 	if err != nil {
-		log.Fatal("connection error: ", err)
+		color.Red("Connection error: %v", err)
+		os.Exit(1)
 	}
 
 	defer client.Close()
