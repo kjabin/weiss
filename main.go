@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"os/signal"
 
 	"github.com/fatih/color"
 	"github.com/gorilla/websocket"
@@ -19,9 +20,7 @@ func (e Event) String() string {
 }
 
 type Client struct {
-	conn   *websocket.Conn
-	recvCh chan Event
-	sendCh chan Event
+	conn *websocket.Conn
 }
 
 func NewClient(url string) (Client, error) {
@@ -34,27 +33,16 @@ func NewClient(url string) (Client, error) {
 		color.Yellow("Websocket connection established with %v", conn.RemoteAddr())
 	}
 	return Client{
-		conn:   conn,
-		recvCh: make(chan Event),
-		sendCh: make(chan Event),
+		conn: conn,
 	}, nil
 }
 
-func (c *Client) Close() {
-	close(c.recvCh)
-	close(c.sendCh)
-	c.conn.Close()
-}
-
-func (c *Client) HandleUserInput() {
+func (c *Client) HandleSend() {
 	sc := bufio.NewScanner(os.Stdin)
 
 	for {
 		if sc.Scan() {
-			c.sendCh <- Event{
-				Kind:    websocket.TextMessage,
-				Message: sc.Bytes(),
-			}
+			c.conn.WriteMessage(websocket.TextMessage, sc.Bytes())
 		}
 		if err := sc.Err(); err != nil {
 			color.Red("Scan error: %v", err)
@@ -63,28 +51,20 @@ func (c *Client) HandleUserInput() {
 	}
 }
 
-func (c *Client) Run() {
+func (c *Client) HandleRecv() {
 	for {
-		select {
-		case e := <-c.recvCh:
-			color.Blue("%v", e)
-		case e := <-c.sendCh:
-			c.conn.WriteMessage(e.Kind, e.Message)
-		}
-	}
-}
-func (c *Client) HandleServerEvents() {
-	for {
-		kind, message, err := c.conn.ReadMessage()
+		kind, msg, err := c.conn.ReadMessage()
 		if err != nil {
 			color.Red("Websocket error: %v", err)
-			os.Exit(1)
+			return
 		}
-		c.recvCh <- Event{
-			Kind:    kind,
-			Message: message,
-		}
+		color.Blue("%v", Event{Kind: kind, Message: msg})
 	}
+}
+
+func (c *Client) Close() {
+	color.Green("Terminating websocket connection from %v", c.conn.RemoteAddr())
+	c.conn.Close()
 }
 
 func main() {
@@ -102,8 +82,15 @@ func main() {
 
 	defer client.Close()
 
-	go client.HandleServerEvents()
-	go client.HandleUserInput()
+	recvCh := make(chan os.Signal, 1)
+	signal.Notify(recvCh, os.Interrupt)
 
-	client.Run()
+	go client.HandleRecv()
+	go client.HandleSend()
+
+	// wait for client to terminate the application
+	// needed to terminate websocket connection gracefully
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, os.Interrupt)
+	<-ch
 }
