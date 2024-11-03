@@ -25,9 +25,13 @@ type Client struct {
 }
 
 func NewClient(url string) (Client, error) {
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	log.Println("Connection to url:", url)
+	conn, resp, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		return Client{}, err
+	}
+	if resp != nil && resp.StatusCode == 101 {
+		log.Println("Websocket connection established with", conn.RemoteAddr())
 	}
 	return Client{
 		conn:   conn,
@@ -84,6 +88,9 @@ func (c *Client) HandleServerEvents() {
 }
 
 func main() {
+	if len(os.Args) < 2 {
+		log.Fatal("Websocket URL required")
+	}
 	url := os.Args[1]
 
 	client, err := NewClient(url)
