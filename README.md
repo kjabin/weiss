@@ -17,6 +17,12 @@ weiss [URL]
 ## Message Format
 
 When receiving messages from the server, Weiss displays:
-{ Kind: **Message Type**, Message: **Message Content** }
+
+```javascript
+{ 
+    kind: "Message Type", 
+    message: "Message Content"
+}
+```
 
 Messages are color-formatted for better visibility and debugging experience.
